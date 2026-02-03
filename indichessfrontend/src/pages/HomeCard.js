@@ -48,19 +48,21 @@ function HomeCard() {
   };
 
   return (
-    <div className="home-card">
-      {isAuthenticated ? (
-        // If authenticated, don't show the login/signup cards, just redirect to /home
-        <div>Redirecting to Home...</div>
-      ) : (
-        <div>
-          {showSignup ? (
-            <SignupCard handleToggleSignup={handleToggleSignup} />
-          ) : (
-            <LoginCard handleToggleSignup={handleToggleSignup} />
-          )}
-        </div>
-      )}
+    <div className="home-page-wrapper">
+      <div className="home-card">
+        {isAuthenticated ? (
+          // If authenticated, don't show the login/signup cards, just redirect to /home
+          <div>Redirecting to Home...</div>
+        ) : (
+          <div>
+            {showSignup ? (
+              <SignupCard handleToggleSignup={handleToggleSignup} />
+            ) : (
+              <LoginCard handleToggleSignup={handleToggleSignup} />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -38,6 +38,13 @@ a:hover {
   text-decoration: underline;
 }
 
+.home-page-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .home-card{
   max-width: 400px;
 }
