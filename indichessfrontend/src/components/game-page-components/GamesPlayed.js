@@ -69,12 +69,8 @@ const GamesPlayed = ({ currentMatchId }) => {
     return <div>{error}</div>;
   }
 
-  if (!games.length) {
-    return <div>No games found yet. Play a game to see it here!</div>;
-  }
-
   return (
-    <div>
+    <div className="games-played-wrapper">
       <h2>Game History</h2>
       {currentMatchId && (
         <button
@@ -88,22 +84,28 @@ const GamesPlayed = ({ currentMatchId }) => {
           Back to current game (#{currentMatchId})
         </button>
       )}
-      <ul>
-        {games.map((g) => (
-          <li
-            key={g.id}
-            style={{ cursor: "pointer", marginBottom: "6px" }}
-            onClick={() => handleOpenGame(g.id)}
-          >
-            <strong>Match #{g.id}</strong> – {g.status}
-            {g.createdAt && (
-              <>
-                {" "}| Started: {formatDateTime(g.createdAt)}
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
+
+      {!games.length ? (
+        <div>No games found yet. Play a game to see it here!</div>
+      ) : (
+        <div className="games-played-list">
+          <ul>
+            {games.map((g) => (
+              <li
+                key={g.id}
+                onClick={() => handleOpenGame(g.id)}
+              >
+                <strong>Match #{g.id}</strong> – {g.status}
+                {g.createdAt && (
+                  <>
+                    {" "}| Started: {formatDateTime(g.createdAt)}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

@@ -17,10 +17,10 @@ body {
   font-family: 'Arial', sans-serif;
   background-color: #f4f4f9;
   margin: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
+  min-height: 100vh;
+  /* Always reserve space for the vertical scrollbar so layout doesn't shift
+     when some pages need scrolling (e.g. Games tab) and others don't */
+  overflow-y: scroll;
 }
 
 h2 {

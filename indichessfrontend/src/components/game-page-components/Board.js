@@ -17,7 +17,7 @@ const Board = ({
 }) => {
   // Debug log for troubleshooting black player move issue
   console.log('[Board] playerColor:', playerColor, '| isMyTurn:', isMyTurn);
-  const [boardSize, setBoardSize] = useState(500); // Initial size of the board
+  const [boardSize] = useState(500); // Fixed size of the board
   const [board, setBoard] = useState([
     ["r", "n", "b", "q", "k", "b", "n", "r"],
     ["p", "p", "p", "p", "p", "p", "p", "p"],
@@ -102,21 +102,6 @@ const Board = ({
       console.error("Failed to reconstruct board from FEN:", initialHistoryFen, e);
     }
   }, [initialHistoryFen]);
-
-  // Handle window resize
-  const updateBoardSize = () => {
-    const size = Math.min(window.innerWidth, window.innerHeight) * 0.6;  // 60% of the viewport size
-    setBoardSize(size);
-  };
-
-  useEffect(() => {
-    updateBoardSize();  // Set initial size
-    window.addEventListener("resize", updateBoardSize);
-
-    return () => {
-      window.removeEventListener("resize", updateBoardSize);
-    };
-  }, []);
 
   useEffect(() => {
     const testElement = document.createElement('div');
