@@ -14,7 +14,7 @@ const Game = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState(null);
   const [gameData, setGameData] = useState(null);
-  const [playerColor] = useState(location.state?.playerColor || 'white');
+  const [playerColor, setPlayerColor] = useState(location.state?.playerColor || null);
   const [username, setUsername] = useState('');
   const [userEmail, setUserEmail] = useState('');
 
@@ -44,7 +44,86 @@ const Game = () => {
         setUsername(user.name || user.email || "User");
         setUserEmail(user.email || "");
 
-        // TODO: once game REST endpoints exist, load game details here
+        // Load initial game details via REST so even finished games can be viewed
+        try {
+          const matchResponse = await fetch(`http://localhost:8080/api/matches/${matchId}`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (matchResponse.ok) {
+            const match = await matchResponse.json();
+
+            // Default to showing emails; we'll try to replace with names below
+            let player1Label = match.createdByEmail;
+            let player2Label = match.opponentEmail;
+
+            // Try to resolve nice display names from user-service
+            try {
+              const usersResp = await fetch("http://localhost:8080/api/users/all", {
+                method: "GET",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+
+              if (usersResp.ok) {
+                const users = await usersResp.json();
+                const byEmail = new Map(
+                  (Array.isArray(users) ? users : [])
+                    .filter((u) => u && u.email)
+                    .map((u) => [u.email, u])
+                );
+
+                const p1User = match.createdByEmail
+                  ? byEmail.get(match.createdByEmail)
+                  : null;
+                const p2User = match.opponentEmail
+                  ? byEmail.get(match.opponentEmail)
+                  : null;
+
+                if (p1User && p1User.name) {
+                  player1Label = p1User.name;
+                }
+                if (p2User && p2User.name) {
+                  player2Label = p2User.name;
+                }
+              }
+            } catch (nameErr) {
+              console.error("Failed to resolve player names, falling back to emails:", nameErr);
+            }
+
+            // Seed gameData with basic match info; live updates can still come via WebSocket
+            setGameData((prev) => ({
+              ...prev,
+              gameType: match.gameType,
+              status: match.status,
+              player1: match.createdByEmail
+                ? { username: player1Label }
+                : undefined,
+              player2: match.opponentEmail
+                ? { username: player2Label }
+                : undefined,
+            }));
+
+            // If playerColor wasn't passed via navigation, derive it from match + current user
+            if (!location.state?.playerColor && user.email) {
+              let derivedColor = "white";
+              if (match.createdByEmail === user.email) {
+                derivedColor = "white";
+              } else if (match.opponentEmail === user.email) {
+                derivedColor = "black";
+              }
+              setPlayerColor(derivedColor);
+            }
+          } else {
+            console.error("Failed to load match details", matchResponse.status);
+          }
+        } catch (matchErr) {
+          console.error("Error loading match details:", matchErr);
+        }
       } catch (err) {
         console.error('Error checking auth / loading game details:', err);
         setError("Failed to load game details");
@@ -94,7 +173,8 @@ const Game = () => {
           destination: `/app/game/${matchId}/join`,
           body: JSON.stringify({ 
             type: 'PLAYER_JOINED',
-            playerColor: playerColor,
+            // Use known color if available; default to white if viewing history
+            playerColor: playerColor || 'white',
             timestamp: new Date().toISOString()
           })
         });
@@ -126,7 +206,7 @@ const Game = () => {
         client.deactivate();
       }
     };
-  }, [matchId, playerColor]);
+  }, [matchId]);
 
   if (error) {
     return (
