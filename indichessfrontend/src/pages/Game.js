@@ -133,7 +133,7 @@ const Game = () => {
     if (matchId) {
       checkAuthAndLoad();
     }
-  }, [matchId, navigate]);
+  }, [matchId, navigate, location]);
 
   useEffect(() => {
     if (!matchId) {
@@ -206,7 +206,7 @@ const Game = () => {
         client.deactivate();
       }
     };
-  }, [matchId]);
+  }, [matchId, playerColor]);
 
   if (error) {
     return (
