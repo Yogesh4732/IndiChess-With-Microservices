@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef } from "react";
 import "../component-styles/Board.css";  // Importing CSS file
 import PromotionModal from "../game-page-components/PromotionModal"
@@ -119,12 +120,14 @@ const Board = ({
 
   // No need to invert isMyTurn; use it directly
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     getMovesOfPlayer();  
   }, [isMyTurn, board]);
 
   // MODIFICATION 5: Handle opponent's move from WebSocket
   // Update the validation in useEffect or applyOpponentMove:
+// eslint-disable-next-line react-hooks/exhaustive-deps
 useEffect(() => {
     if (opponentMove && opponentMove !== lastOpponentMove) {
       console.log("📥 New opponent move received:", opponentMove);
@@ -234,7 +237,6 @@ const applyOpponentMove = (moveData) => {
         // OPTION 2: Apply move manually to current board
         console.log("⚠️ No board in move data, applying move manually");
         const newBoard = board.map(row => [...row]); // Deep clone 2D array
-        const fenBefore = convertBoardToFEN(board);
         
         // Handle promotion
         if (isPromotion && promotedTo) {
@@ -421,7 +423,7 @@ const createMoveNotation = (from, to, piece, capturedPiece, castled, board) => {
 
   const isSquareUnderAttack = (row, col) => {
     for (let i = 0; i < allMoves.length; i++) {
-      const [piece, prow, pcol, arow, acol] = allMoves[i];
+      const [, , , arow, acol] = allMoves[i];
       if (arow === row && acol === col) {
         return true;
       }
