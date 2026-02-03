@@ -7,25 +7,35 @@ import GameInfo from "../components/game-page-components/GameInfo";
 function HomePage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
     const checkAuth = async () => {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        navigate("/", { replace: true });
+        return;
+      }
+
       try {
-        // Use a protected endpoint to verify authentication via JWT cookie
-        const response = await fetch("http://localhost:8080/user/username", {
+        const response = await fetch("http://localhost:8080/api/users/me", {
           method: "GET",
-          credentials: "include",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         if (!response.ok) {
-          // Not authenticated -> send back to login/landing page
           navigate("/", { replace: true });
+          if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem("authToken");
+          }
           return;
         }
 
-        // Backend currently returns plain text "User"; adapt once it returns real username
-        const text = await response.text();
-        setUsername(text);
+        const data = await response.json();
+        setUsername(data.name || data.email || "User");
+        setUserEmail(data.email || "");
       } catch (error) {
         console.error("Error checking authentication on /home:", error);
         navigate("/", { replace: true });
@@ -41,7 +51,7 @@ function HomePage() {
       <div className="main-container">
         <Header username={username} />
         <div className="game-info-container">
-          <GameInfo />
+          <GameInfo userEmail={userEmail} />
         </div>
       </div>
     </div>

@@ -4,53 +4,47 @@ import GameContainer from "../components/game-page-components/GameContainer";
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 
 const Game = () => {
   const navigate = useNavigate();
   const { matchId } = useParams();
+  const location = useLocation();
   const [stompClient, setStompClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState(null);
   const [gameData, setGameData] = useState(null);
-  const [playerColor, setPlayerColor] = useState('white');
+  const [playerColor] = useState(location.state?.playerColor || 'white');
   const [username, setUsername] = useState('');
 
   // Auth guard: ensure user is logged in before trying to load game
   useEffect(() => {
     const checkAuthAndLoad = async () => {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        navigate("/", { replace: true });
+        return;
+      }
+
       try {
-        const authResponse = await fetch("http://localhost:8080/user/username", {
+        const authResponse = await fetch("http://localhost:8080/api/users/me", {
           method: "GET",
-          credentials: "include",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         if (!authResponse.ok) {
-          // Not logged in; send back to landing/login
           navigate("/", { replace: true });
           return;
         }
 
-        // Backend currently returns plain text "User"; adapt once it returns real username
-        const usernameText = await authResponse.text();
-        setUsername(usernameText);
+        const user = await authResponse.json();
+        setUsername(user.name || user.email || "User");
 
-        // Now load game details
-        const response = await fetch(`http://localhost:8080/game/${matchId}`, {
-          method: 'GET',
-          credentials: 'include'
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch game data');
-        }
-
-        const data = await response.json();
-        console.log("Game details response:", data);
-        setPlayerColor(data.playerColor);
-        setGameData(data);
+        // TODO: once game REST endpoints exist, load game details here
       } catch (err) {
-        console.error('Error fetching game details:', err);
+        console.error('Error checking auth / loading game details:', err);
         setError("Failed to load game details");
       }
     };
@@ -66,27 +60,8 @@ const Game = () => {
       return;
     }
 
-    // To this:
-  fetch(`http://localhost:8080/game/${matchId}`, {
-      method: 'GET',
-      credentials: 'include'  // Important for cookies
-  })
-    .then(response => {
-      if (!response.ok) throw new Error('Failed to fetch game data');
-      return response.json();
-    })
-    .then(data => {
-      setPlayerColor(data.playerColor); // 'white' or 'black'
-      setGameData(data);
-      console.log("Game data loaded:", data);
-    })
-    .catch(error => {
-      console.error('Error fetching game details:', error);
-      setError("Failed to load game details");
-    });
-
-    // WebSocket connection
-    const socket = new SockJS('http://localhost:8080/ws');
+    // WebSocket connection to match-service (bypasses gateway)
+    const socket = new SockJS('http://localhost:8082/ws');
     const client = new Client({
       webSocketFactory: () => socket,
       reconnectDelay: 5000,
@@ -109,8 +84,7 @@ const Game = () => {
         // Subscribe to move updates
         client.subscribe(`/topic/moves/${matchId}`, (message) => {
           console.log("Move received:", message.body);
-          const moveData = JSON.parse(message.body);
-          // This will be handled in GameContainer
+          // Handled in GameContainer via its own subscription
         });
         
         // Notify server that player has joined
@@ -150,7 +124,7 @@ const Game = () => {
         client.deactivate();
       }
     };
-  }, [matchId]);
+  }, [matchId, playerColor]);
 
   if (error) {
     return (
@@ -177,6 +151,22 @@ const Game = () => {
           <div className="loading-container">
             <div className="spinner"></div>
             <p>Loading game...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If game is connected but still waiting for opponent, show a waiting screen
+  if (gameData?.status === "Waiting for opponent") {
+    return (
+      <div className="app-container">
+        <SideNav />
+        <div className="main-container">
+          <Header username={username} />
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Waiting for opponent to join match #{matchId}...</p>
           </div>
         </div>
       </div>

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaFire, FaRegHandshake, FaRobot, FaChessPawn, FaTimes } from "react-icons/fa";
 import "../component-styles/GameInfo.css";
 
-const GameInfo = ({ streak }) => {
+const GameInfo = ({ streak, userEmail }) => {
   const navigate = useNavigate();
 
   // STANDARD matchmaking state
@@ -38,15 +38,6 @@ const GameInfo = ({ streak }) => {
       searchStandardTimerRef.current = null;
     }
 
-    try {
-      await fetch("http://localhost:8080/game/cancel-waiting", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (error) {
-      console.error("Error cancelling STANDARD search:", error);
-    }
-
     setIsSearchingStandard(false);
     setSearchTimeStandard(0);
   };
@@ -59,15 +50,6 @@ const GameInfo = ({ streak }) => {
     if (searchRapidTimerRef.current) {
       clearTimeout(searchRapidTimerRef.current);
       searchRapidTimerRef.current = null;
-    }
-
-    try {
-      await fetch("http://localhost:8080/game/cancel-rapid-waiting", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (error) {
-      console.error("Error cancelling RAPID search:", error);
     }
 
     setIsSearchingRapid(false);
@@ -89,9 +71,14 @@ const GameInfo = ({ streak }) => {
       }
 
       try {
-        const response = await fetch("http://localhost:8080/game/check-match", {
+        const token = localStorage.getItem("authToken");
+        const response = await fetch("http://localhost:8080/api/games/check-match", {
           method: "GET",
-          credentials: "include",
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
         });
 
         if (response.ok) {
@@ -123,9 +110,14 @@ const GameInfo = ({ streak }) => {
   const pollRapidMatch = () => {
     pollingRapidRef.current = setInterval(async () => {
       try {
-        const response = await fetch("http://localhost:8080/game/check-rapid-match", {
+        const token = localStorage.getItem("authToken");
+        const response = await fetch("http://localhost:8080/api/games/check-rapid-match", {
           method: "GET",
-          credentials: "include",
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
         });
 
         if (response.ok) {
@@ -152,27 +144,22 @@ const GameInfo = ({ streak }) => {
   };
 
   const createStandardGame = async () => {
-    // If already searching, this acts as cancel
-    if (isSearchingStandard) {
-      await cancelStandardSearch();
-      return;
-    }
-
-    // Ensure we are not in RAPID queue at the same time
-    if (isSearchingRapid) {
-      await cancelRapidSearch();
-    }
-
-    setIsSearchingStandard(true);
-    setSearchTimeStandard(0);
-
     try {
-      const response = await fetch("http://localhost:8080/game", {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        alert("You must be logged in to start a new game.");
+        return;
+      }
+
+      setIsSearchingStandard(true);
+      setSearchTimeStandard(0);
+
+      const response = await fetch("http://localhost:8080/api/matches/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        credentials: "include",
       });
 
       if (response.ok) {
@@ -187,23 +174,19 @@ const GameInfo = ({ streak }) => {
         }
 
         const result = await response.json();
-        console.log("Create STANDARD game response:", result);
+        console.log("Create STANDARD match response:", result);
 
-        if (result.matchId === -1) {
-          // Player1: waiting for opponent
-          pollStandardMatch();
+        if (result.id) {
+          // Determine player color based on who created the match.
+          // If the current user is the creator, they play white; otherwise black.
+          const me = userEmail || "";
+          let playerColor = "white";
+          if (result.createdByEmail && me && result.createdByEmail !== me) {
+            playerColor = "black";
+          }
 
-          // 90-second timeout
-          searchStandardTimerRef.current = setTimeout(async () => {
-            if (isSearchingStandard) {
-              await cancelStandardSearch();
-              alert("Could not find an opponent within 90 seconds. Please try again.");
-            }
-          }, 90000);
-        } else if (result.matchId > 0) {
-          // Player2: immediate match
           setIsSearchingStandard(false);
-          navigate(`/game/${result.matchId}`);
+          navigate(`/game/${result.id}`, { state: { playerColor } });
         } else {
           setIsSearchingStandard(false);
           alert("Failed to create match. Please try again.");
@@ -225,26 +208,23 @@ const GameInfo = ({ streak }) => {
   };
 
   const createRapidGame = async () => {
-    if (isSearchingRapid) {
-      await cancelRapidSearch();
-      return;
-    }
-
-    // Ensure we are not in STANDARD queue at the same time
-    if (isSearchingStandard) {
-      await cancelStandardSearch();
-    }
-
-    setIsSearchingRapid(true);
-    setSearchTimeRapid(0);
-
     try {
-      const response = await fetch("http://localhost:8080/game/rapid", {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        alert("You must be logged in to start a new game.");
+        return;
+      }
+
+      setIsSearchingRapid(true);
+      setSearchTimeRapid(0);
+
+      // RAPID uses a separate matchmaking endpoint so it can be treated differently on the backend.
+      const response = await fetch("http://localhost:8080/api/matches/create-rapid", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        credentials: "include",
       });
 
       if (response.ok) {
@@ -259,23 +239,18 @@ const GameInfo = ({ streak }) => {
         }
 
         const result = await response.json();
-        console.log("Create RAPID game response:", result);
+        console.log("Create RAPID match response:", result);
 
-        if (result.matchId === -1) {
-          // Player1: waiting for opponent in RAPID queue
-          pollRapidMatch();
+        if (result.id) {
+          // Same color logic for rapid games.
+          const me = userEmail || "";
+          let playerColor = "white";
+          if (result.createdByEmail && me && result.createdByEmail !== me) {
+            playerColor = "black";
+          }
 
-          // 90-second timeout
-          searchRapidTimerRef.current = setTimeout(async () => {
-            if (isSearchingRapid) {
-              await cancelRapidSearch();
-              alert("Could not find a RAPID opponent in time. Please try again.");
-            }
-          }, 90000);
-        } else if (result.matchId > 0) {
-          // Player2: immediate RAPID match
           setIsSearchingRapid(false);
-          navigate(`/game/${result.matchId}`);
+          navigate(`/game/${result.id}`, { state: { playerColor } });
         } else {
           setIsSearchingRapid(false);
           alert("Failed to create RAPID match. Please try again.");

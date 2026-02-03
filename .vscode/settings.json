@@ -1,0 +1,9 @@
+{
+  "java.project.sourcePaths": [
+    "IndiChessBackend/src/main/java",
+    "IndiChessBackend/indiChess/user-service/src/main/java",
+    "IndiChessBackend/indiChess/match-service/src/main/java",
+    "IndiChessBackend/indiChess/api-gateway/src/main/java",
+    "IndiChessBackend/indiChess/internal-communication-service/src/main/java"
+  ]
+}

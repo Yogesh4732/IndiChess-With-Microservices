@@ -11,9 +11,12 @@ const Chat = ({ matchId, stompClient, isConnected, username, playerColor }) => {
   useEffect(() => {
     const loadHistory = async () => {
       try {
+        const token = localStorage.getItem("authToken");
         const response = await fetch(`http://localhost:8080/api/games/${matchId}/chat`, {
           method: "GET",
-          credentials: "include",
+          headers: token
+            ? { Authorization: `Bearer ${token}` }
+            : {},
         });
 
         if (!response.ok) {
@@ -79,7 +82,10 @@ const Chat = ({ matchId, stompClient, isConnected, username, playerColor }) => {
     try {
       stompClient.publish({
         destination: `/app/game/${matchId}/chat`,
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          from: username,
+          message: text,
+        }),
       });
       setInputValue("");
     } catch (error) {

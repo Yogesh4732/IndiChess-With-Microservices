@@ -8,21 +8,31 @@ function HomeCard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false); // To track authentication status
   const navigate = useNavigate(); // For navigation (redirecting to home)
   
-  // Check if the user is already authenticated on component mount
+  // Check if the user is already authenticated on component mount using JWT
   useEffect(() => {
     const checkAuth = async () => {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        setIsAuthenticated(false);
+        return;
+      }
+
       try {
-        const response = await fetch("http://localhost:8080/home", {
+        const response = await fetch("http://localhost:8080/api/users/me", {
           method: "GET",
-          credentials: "include",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         if (response.ok) {
-          // If authenticated, redirect to /home
           setIsAuthenticated(true);
-          navigate("/home");  // Redirect to /home using useNavigate
+          navigate("/home");
         } else {
           setIsAuthenticated(false);
+          if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem("authToken");
+          }
         }
       } catch (error) {
         console.error("Error checking authentication:", error);

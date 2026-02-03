@@ -11,23 +11,25 @@ function SignupCard({ handleToggleSignup }) {
 
   const handleSignup = async (e) => {
     e.preventDefault();
+    setError("");
 
     try {
-      // Send signup request to backend
-      const response = await axios.post("http://localhost:8080/signup", {
-        username,
-        emailId,
+      // Send signup request to backend JWT auth endpoint
+      const response = await axios.post("http://localhost:8080/api/auth/signup", {
+        name: username,
+        email: emailId,
         password,
-        country,
       });
 
       console.log(response);
-      // If signup is successful, redirect to login or home
-      if (response.status === 200) {
-        // console.log("Show login");
+      // Backend typically returns 201 CREATED; treat any 2xx as success
+      if (response.status >= 200 && response.status < 300) {
         handleToggleSignup();
+      } else {
+        setError("Signup failed. Please try again.");
       }
     } catch (err) {
+      console.error("Signup error", err);
       setError("Error in signup. Please try again.");
     }
   };

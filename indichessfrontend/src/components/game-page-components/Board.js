@@ -11,7 +11,9 @@ const Board = ({
   playerColor,        // 'white' or 'black' - which color this player is
   isMyTurn,           // Boolean - whether it's currently this player's turn
   isConnected,        // Boolean - WebSocket connection status
-  matchId             // Game match ID
+  matchId,            // Game match ID
+  initialHistoryFen,  // Optional FEN from history to reconstruct board
+  isGameOver          // Boolean - whether the match is already finished
 }) => {
   // Debug log for troubleshooting black player move issue
   console.log('[Board] playerColor:', playerColor, '| isMyTurn:', isMyTurn);
@@ -34,7 +36,6 @@ const Board = ({
 
   // piece, prow, pcol, arow, acol
   const [allMoves, setAllMoves] = useState([]);
-  const [prevAllMoves, setPrevAllMoves] = useState([]);
 
   const [blackKingCoordinates, setBlackKingCoordinates] = useState([0,4]);
   const [whiteKingCoordinates, setWhiteKingCoordinates] = useState([7,4]);
@@ -58,6 +59,49 @@ const Board = ({
 
   // MODIFICATION 3: Add state for opponent's move
   const [lastOpponentMove, setLastOpponentMove] = useState(null);
+
+  // Reconstruct board position from the latest FEN when history is loaded
+  useEffect(() => {
+    if (!initialHistoryFen) return;
+
+    try {
+      const [position] = initialHistoryFen.split(" "); // FEN piece placement field
+      const rows = position.split("/");
+      if (rows.length !== 8) return;
+
+      const newBoard = rows.map((row) => {
+        const squares = [];
+        for (const ch of row) {
+          if (/[1-8]/.test(ch)) {
+            const empty = parseInt(ch, 10);
+            for (let i = 0; i < empty; i++) {
+              squares.push("");
+            }
+          } else {
+            squares.push(ch);
+          }
+        }
+        return squares;
+      });
+
+      if (newBoard.every((r) => r.length === 8)) {
+        setBoard(newBoard);
+
+        // Update king coordinates based on reconstructed board
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            if (newBoard[r][c] === "K") {
+              setWhiteKingCoordinates([r, c]);
+            } else if (newBoard[r][c] === "k") {
+              setBlackKingCoordinates([r, c]);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to reconstruct board from FEN:", initialHistoryFen, e);
+    }
+  }, [initialHistoryFen]);
 
   // Handle window resize
   const updateBoardSize = () => {
@@ -137,7 +181,7 @@ useEffect(() => {
       applyOpponentMove(opponentMove);
       setLastOpponentMove(opponentMove);
     }
-}, [opponentMove]);
+}, [opponentMove, lastOpponentMove, playerColor]);
 
 const applyOpponentMove = (moveData) => {
     console.log("📬 Applying opponent move:", moveData);
@@ -432,13 +476,16 @@ const createMoveNotation = (from, to, piece, capturedPiece, castled, board) => {
           || (row === 6 && piece === "P" &&  board[row+2*direction][col] === "" && board[row+direction][col] === ""))
           moves.push([piece, row, col,row + 2*direction, col]);
           
-          if((row === 3 && piece === "P" && prevMove.piece === "p" && 
-            Math.abs(prevMove.sqnumfrom-prevMove.sqnumto) === 2 && Math.abs(col-prevMove.tc)===1)
-          ||
-            (row === 4 && piece === "p" && prevMove.piece === "P" && 
-            Math.abs(prevMove.sqnumfrom-prevMove.sqnumto) === 2 && Math.abs(col-prevMove.tc)===1)
-          )
-          moves.push([piece, row, col,row + direction, prevMove.tc]);
+          if (
+            prevMove &&
+            ((row === 3 && piece === "P" && prevMove.piece === "p" &&
+              Math.abs(prevMove.sqnumfrom - prevMove.sqnumto) === 2 && Math.abs(col - prevMove.tc) === 1)
+              ||
+             (row === 4 && piece === "p" && prevMove.piece === "P" &&
+              Math.abs(prevMove.sqnumfrom - prevMove.sqnumto) === 2 && Math.abs(col - prevMove.tc) === 1))
+          ) {
+            moves.push([piece, row, col, row + direction, prevMove.tc]);
+          }
 
         break;
 
@@ -916,7 +963,6 @@ const createMoveNotation = (from, to, piece, capturedPiece, castled, board) => {
   };
 
   const getMovesOfPlayer = () => {
-    setPrevAllMoves(allMoves);
     setAllMoves([]);
     for(let i = 0; i<8; i++){
       for(let j = 0; j<8; j++){
@@ -933,6 +979,12 @@ const createMoveNotation = (from, to, piece, capturedPiece, castled, board) => {
 
   // MODIFICATION 13: Update handleDrop to send move to server
   const handleDrop = (e, row, col) => {
+    // Do not allow any moves once the match has finished
+    if (isGameOver) {
+      alert("Match finished! No more moves can be played.");
+      return;
+    }
+
     // Check connection and turn
     if (!isConnected) {
       alert("Not connected to server!");
@@ -1094,7 +1146,7 @@ console.log("matchId in moveData:", moveData.matchId);
                 onDragStart={(e) => handleDragStart(e, rowIndex, colIndex)}
                 onDrop={(e) => handleDrop(e, rowIndex, colIndex)}
                 onDragOver={handleDragOver}
-                draggable={piece !== "" && isConnected && isMyTurn}  // MODIFICATION 16: Update draggable condition
+                draggable={piece !== "" && isConnected && isMyTurn && !isGameOver}  // MODIFICATION 16: Update draggable condition
               >
                 {getPieceIcon(piece)}
                 {validMoves.some(([r, c]) => r === rowIndex && c === colIndex) && (

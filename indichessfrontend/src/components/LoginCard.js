@@ -5,30 +5,32 @@ import axios from "axios";
 function LoginCard({ handleToggleSignup }) {
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("");
+  // Treat this as the email the user logs in with
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError("");
 
     try {
-      // Send login request to backend
-      const response = await axios.post(
-        "http://localhost:8080/login",
-        { username, password },
-        { withCredentials: true }
-      );
+      const response = await axios.post("http://localhost:8080/api/auth/login", {
+        email,
+        password,
+      });
 
-      // If login is successful, redirect to home
-      if (response) {
-        console.log(response);
+      // Expecting { token: "..." }
+      const token = response?.data?.token;
+      if (token) {
+        localStorage.setItem("authToken", token);
         navigate("/home");
       } else {
-        console.log("Not Auth");
+        setError("Login failed. Please try again.");
       }
     } catch (err) {
-      setError("Invalid username or password");
+      console.error("Login error", err);
+      setError("Invalid email or password");
     }
   };
 
@@ -38,13 +40,13 @@ function LoginCard({ handleToggleSignup }) {
 
       <form onSubmit={handleLogin}>
         <div className="input-group">
-          <label htmlFor="username">Username</label>
+          <label htmlFor="email">Email</label>
           <input
-            type="text"
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter your username"
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email"
             required
           />
         </div>
@@ -66,14 +68,11 @@ function LoginCard({ handleToggleSignup }) {
         <button type="submit" className="simple-auth-btn">Login</button>
       </form>
 
-      <div className="oauth-buttons">
-        <a href="http://localhost:8080/oauth2/authorization/google">
-          <button className="btn-google">Login with Google</button>
-        </a>
-        <a href="http://localhost:8080/oauth2/authorization/github">
-          <button className="btn-github">Login with GitHub</button>
-        </a>
-      </div>
+      <a
+        href="http://localhost:8083/oauth2/authorization/google"
+        className="simple-auth-btn"
+        style={{textAlign: "center",backgroundColor:"darkred" }}
+      >Login with Google</a>
 
       <div className="signup-link">
         Not an existing user? 
@@ -82,4 +81,5 @@ function LoginCard({ handleToggleSignup }) {
     </div>
   );
 }
+
 export default LoginCard;

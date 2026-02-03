@@ -6,7 +6,9 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
   const [moves, setMoves] = useState([]);
   const [isMyTurn, setIsMyTurn] = useState(initialGameData?.isMyTurn || (playerColor === 'white'));
   const [gameStatus, setGameStatus] = useState(initialGameData?.status || "Game started");
+  const [isGameOver, setIsGameOver] = useState(false);
   const [opponentMove, setOpponentMove] = useState(null); // To trigger board updates
+  const [initialHistoryFen, setInitialHistoryFen] = useState(null);
   const moveSubscriptionRef = useRef(null);
   const gameStateSubscriptionRef = useRef(null);
   const drawOfferSubscriptionRef = useRef(null);
@@ -75,6 +77,7 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
           
           if (state.result) {
             // Game ended
+            setIsGameOver(true);
             setGameStatus(`Game Over: ${state.result}`);
             alert(`Game Over: ${state.result}`);
           }
@@ -84,30 +87,45 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
         }
       });
 
-      // Subscribe to per-user draw offer queue
-      drawOfferSubscriptionRef.current = stompClient.subscribe(`/user/queue/draw-offers`, (message) => {
+      // Subscribe to draw offer topic for this match
+      drawOfferSubscriptionRef.current = stompClient.subscribe(`/topic/draw-offers/${matchId}`, (message) => {
         try {
           const payload = JSON.parse(message.body);
           console.log("Draw offer message:", payload);
 
-          if (payload.type === "DRAW_OFFER_SENT") {
-            // Confirmation for the player who offered the draw
-            alert("Draw offer sent to your opponent.");
-          } else if (payload.type === "DRAW_OFFER") {
-            // Incoming draw offer from opponent
-            const from = payload.from || "Your opponent";
-            const accept = window.confirm(`${from} offers a draw. Do you accept?`);
-            if (accept) {
-              // Send draw acceptance directly
-              stompClient.publish({
-                destination: `/app/game/${matchId}/draw/accept`,
-                body: JSON.stringify({
-                  playerColor: playerColor,
-                  timestamp: new Date().toISOString(),
-                  matchId: matchId
-                })
-              });
+          if (payload.type === "DRAW_OFFER") {
+            const fromColor = (payload.playerColor || "").toLowerCase();
+
+            if (!fromColor) {
+              return;
             }
+
+            // If this client initiated the offer, just confirm it was sent
+            if (fromColor === playerColor.toLowerCase()) {
+              alert("Draw offer sent to your opponent.");
+            } else {
+              // Incoming draw offer from opponent
+              const fromLabel = fromColor === "white" ? "White" : fromColor === "black" ? "Black" : "Your opponent";
+              const accept = window.confirm(`${fromLabel} offers a draw. Do you accept?`);
+              if (accept) {
+                // Send draw acceptance directly
+                stompClient.publish({
+                  destination: `/app/game/${matchId}/draw/accept`,
+                  body: JSON.stringify({
+                    playerColor: playerColor,
+                    timestamp: new Date().toISOString(),
+                    matchId: matchId
+                  })
+                });
+              }
+            }
+          } else if (payload.type === "DRAW_ACCEPTED") {
+            // Draw has been agreed
+            const resultText = payload.result || "Draw agreed";
+            setIsMyTurn(false);
+            setIsGameOver(true);
+            setGameStatus(`Game Over: ${resultText}`);
+            alert(`Game Over: ${resultText}`);
           }
         } catch (err) {
           console.error("Error handling draw-offer message:", err);
@@ -128,13 +146,21 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
         drawOfferSubscriptionRef.current.unsubscribe();
       }
     };
-  }, [stompClient, isConnected, matchId, playerColor]);
+  }, [stompClient, isConnected, matchId, playerColor, hasGameStarted]);
 
   // Timer effect: decrement clocks based on whose turn it is (per client view)
   useEffect(() => {
     if (!isRapid) return;
     if (!isConnected) return;
     if (!hasGameStarted) return; // do not start countdown until the first move has been made
+    if (isGameOver) {
+      // Ensure any existing timer is cleared once the game is over
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
 
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -179,17 +205,21 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
+        timerRef.current = null;
       }
     };
-  }, [isRapid, isConnected, isMyTurn, playerColor, hasGameStarted]);
+  }, [isRapid, isConnected, isMyTurn, playerColor, hasGameStarted, isGameOver]);
 
   // Load existing move history from backend when game loads
   useEffect(() => {
     const fetchHistory = async () => {
       try {
+        const token = localStorage.getItem("authToken");
         const response = await fetch(`http://localhost:8080/api/games/${matchId}/moves`, {
           method: 'GET',
-          credentials: 'include',
+          headers: token
+            ? { Authorization: `Bearer ${token}` }
+            : {},
         });
         if (!response.ok) {
           console.error('Failed to fetch move history', response.status);
@@ -234,6 +264,12 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
 
         if (groupedMoves.length > 0) {
           setMoves(groupedMoves);
+
+          // Last move's fenAfter represents the final board position
+          const last = history[history.length - 1];
+          if (last && last.fenAfter) {
+            setInitialHistoryFen(last.fenAfter);
+          }
         }
       } catch (err) {
         console.error('Error loading move history:', err);
@@ -283,6 +319,11 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
       return false;
     }
 
+    if (isGameOver) {
+      alert("Match finished! No more moves are allowed.");
+      return false;
+    }
+
     if (!isMyTurn) {
       alert("It's not your turn!");
       return false;
@@ -310,6 +351,11 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
   const handleGameAction = (action, data = {}) => {
     if (!stompClient || !isConnected) {
       alert("Not connected to server!");
+      return;
+    }
+
+    if (isGameOver) {
+      alert("Match finished! No further actions are allowed.");
       return;
     }
 
@@ -366,11 +412,13 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
         isMyTurn={isMyTurn}
         matchId={matchId}
         isConnected={isConnected}
+        isGameOver={isGameOver}
         whiteTime={whiteTime}
         blackTime={blackTime}
         player1={initialGameData?.player1}
         player2={initialGameData?.player2}
         gameType={initialGameData?.gameType}
+        initialHistoryFen={initialHistoryFen}
       />
       <GamePlayControlContainer 
         moves={moves}

@@ -11,11 +11,13 @@ const BoardLayout = ({
   isMyTurn, 
   matchId,
   isConnected,
+  isGameOver,
   whiteTime,
   blackTime,
   player1,
   player2,
-  gameType
+  gameType,
+  initialHistoryFen
 }) => {
 
   const formatTime = (seconds) => {
@@ -53,6 +55,8 @@ const BoardLayout = ({
         playerColor={playerColor}
         isMyTurn={isMyTurn}
         isConnected={isConnected}
+        isGameOver={isGameOver}
+        initialHistoryFen={initialHistoryFen}
       />
       <Player 
         username={myInfo?.username || 'You'}
