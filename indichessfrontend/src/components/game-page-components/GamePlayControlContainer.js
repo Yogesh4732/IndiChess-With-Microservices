@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Analysis from "./Analysis";
 import NewGame from "./NewGame";
 import GamesPlayed from "./GamesPlayed";
@@ -6,8 +6,15 @@ import Players from "./Players";
 import Chat from "./Chat";
 import "../component-styles/GamePlayControlContainer.css";
 
-const GamePlayControlContainer = ({ moves, matchId, stompClient, isConnected, playerColor, username }) => {
-  const [activeTab, setActiveTab] = useState("Analysis");
+const GamePlayControlContainer = ({ moves, matchId, stompClient, isConnected, playerColor, username, userEmail, initialTab }) => {
+  const [activeTab, setActiveTab] = useState(initialTab || "Analysis");
+
+  // Update active tab if a new initialTab is provided (e.g. via navigation state)
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Handle tab selection
   const handleTabClick = (tab) => {
@@ -54,8 +61,8 @@ const GamePlayControlContainer = ({ moves, matchId, stompClient, isConnected, pl
       <div className="content">
         {activeTab === "Analysis" && <Analysis moves={moves}/>}
         {activeTab === "NewGame" && <NewGame />}
-        {activeTab === "Games" && <GamesPlayed />}
-        {activeTab === "Players" && <Players />}
+        {activeTab === "Games" && <GamesPlayed currentMatchId={matchId} />}
+        {activeTab === "Players" && <Players currentUserEmail={userEmail} />}
         {activeTab === "Chat" && (
           <Chat
             matchId={matchId}

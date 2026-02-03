@@ -16,6 +16,7 @@ const Game = () => {
   const [gameData, setGameData] = useState(null);
   const [playerColor] = useState(location.state?.playerColor || 'white');
   const [username, setUsername] = useState('');
+  const [userEmail, setUserEmail] = useState('');
 
   // Auth guard: ensure user is logged in before trying to load game
   useEffect(() => {
@@ -41,6 +42,7 @@ const Game = () => {
 
         const user = await authResponse.json();
         setUsername(user.name || user.email || "User");
+        setUserEmail(user.email || "");
 
         // TODO: once game REST endpoints exist, load game details here
       } catch (err) {
@@ -157,22 +159,6 @@ const Game = () => {
     );
   }
 
-  // If game is connected but still waiting for opponent, show a waiting screen
-  if (gameData?.status === "Waiting for opponent") {
-    return (
-      <div className="app-container">
-        <SideNav />
-        <div className="main-container">
-          <Header username={username} />
-          <div className="loading-container">
-            <div className="spinner"></div>
-            <p>Waiting for opponent to join match #{matchId}...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="app-container">
       <SideNav />
@@ -185,6 +171,8 @@ const Game = () => {
           playerColor={playerColor}
           initialGameData={gameData}
           username={username}
+          userEmail={userEmail}
+          initialTab={location.state?.tab}
         />
       </div>
     </div>

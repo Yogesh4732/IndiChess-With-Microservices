@@ -6,6 +6,7 @@ import com.indichess.matchservice.repo.MatchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -18,9 +19,18 @@ public class MatchService {
     public MatchDto createMatch(String creatorEmail, String gameType) {
         String effectiveType = (gameType == null || gameType.isBlank()) ? "STANDARD" : gameType.toUpperCase();
 
+        // Only match against games that have been created recently (e.g. within the last 90 seconds)
+        // to avoid pairing a player into a very old, stale waiting match.
+        Instant cutoff = Instant.now().minusSeconds(90);
+
         // First try to find an existing open match of this type created by someone else
         return matchRepository
-                .findFirstByStatusAndOpponentEmailIsNullAndCreatedByEmailNotAndGameType("CREATED", creatorEmail, effectiveType)
+            .findFirstByStatusAndOpponentEmailIsNullAndCreatedByEmailNotAndGameTypeAndCreatedAtAfterOrderByCreatedAtAsc(
+                "CREATED",
+                creatorEmail,
+                effectiveType,
+                cutoff
+            )
                 .map(openMatch -> {
                     openMatch.setOpponentEmail(creatorEmail);
                     openMatch.setStatus("IN_PROGRESS");

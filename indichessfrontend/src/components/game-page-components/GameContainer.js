@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import BoardLayout from "./BoardLayout";
 import GamePlayControlContainer from "./GamePlayControlContainer";
 
-const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initialGameData, username }) => {
+const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initialGameData, username, userEmail, initialTab }) => {
   const [moves, setMoves] = useState([]);
   const [isMyTurn, setIsMyTurn] = useState(initialGameData?.isMyTurn || (playerColor === 'white'));
   const [gameStatus, setGameStatus] = useState(initialGameData?.status || "Game started");
@@ -427,6 +427,8 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
         isConnected={isConnected}
         playerColor={playerColor}
         username={username}
+        userEmail={userEmail}
+        initialTab={initialTab}
       />
     </div>
   );
