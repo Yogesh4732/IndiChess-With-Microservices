@@ -55,6 +55,31 @@ public class MatchService {
                 .collect(Collectors.toList());
     }
 
+    public MatchDto getMatch(Long matchId) {
+        Match match = matchRepository.findById(matchId)
+                .orElseThrow(() -> new IllegalArgumentException("Match not found"));
+        return toDto(match);
+    }
+
+    public void cancelWaitingMatch(Long matchId, String requesterEmail) {
+        Match match = matchRepository.findById(matchId)
+                .orElseThrow(() -> new IllegalArgumentException("Match not found"));
+
+        // Only the creator of the match can cancel it while it's still waiting for an opponent.
+        if (!requesterEmail.equals(match.getCreatedByEmail())) {
+            throw new IllegalStateException("Only the creator can cancel this match");
+        }
+
+        // If an opponent has already joined or the match has progressed, do not allow cancel.
+        if (match.getOpponentEmail() != null || !"CREATED".equalsIgnoreCase(match.getStatus())) {
+            throw new IllegalStateException("Match can no longer be cancelled");
+        }
+
+        // Mark as cancelled so it is no longer picked up by matchmaking.
+        match.setStatus("CANCELLED");
+        matchRepository.save(match);
+    }
+
     public MatchDto joinMatch(Long matchId, String email) {
         Match match = matchRepository.findById(matchId)
                 .orElseThrow(() -> new IllegalArgumentException("Match not found"));

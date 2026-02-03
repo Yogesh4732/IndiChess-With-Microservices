@@ -11,12 +11,14 @@ const GameInfo = ({ streak, userEmail }) => {
   const [searchTimeStandard, setSearchTimeStandard] = useState(0);
   const pollingStandardRef = useRef(null);
   const searchStandardTimerRef = useRef(null);
+  const pendingStandardMatchIdRef = useRef(null);
 
   // RAPID (10 min) matchmaking state
   const [isSearchingRapid, setIsSearchingRapid] = useState(false);
   const [searchTimeRapid, setSearchTimeRapid] = useState(0);
   const pollingRapidRef = useRef(null);
   const searchRapidTimerRef = useRef(null);
+  const pendingRapidMatchIdRef = useRef(null);
 
   // Clean up on unmount
   useEffect(() => {
@@ -38,6 +40,26 @@ const GameInfo = ({ streak, userEmail }) => {
       searchStandardTimerRef.current = null;
     }
 
+    const matchId = pendingStandardMatchIdRef.current;
+    pendingStandardMatchIdRef.current = null;
+
+    // Best-effort cancel on the backend so the open match is not left dangling.
+    if (matchId) {
+      try {
+        const token = localStorage.getItem("authToken");
+        await fetch(`http://localhost:8080/api/matches/${matchId}/cancel`, {
+          method: "POST",
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        });
+      } catch (e) {
+        console.error("Error cancelling STANDARD search on server:", e);
+      }
+    }
+
     setIsSearchingStandard(false);
     setSearchTimeStandard(0);
   };
@@ -52,11 +74,30 @@ const GameInfo = ({ streak, userEmail }) => {
       searchRapidTimerRef.current = null;
     }
 
+    const matchId = pendingRapidMatchIdRef.current;
+    pendingRapidMatchIdRef.current = null;
+
+    if (matchId) {
+      try {
+        const token = localStorage.getItem("authToken");
+        await fetch(`http://localhost:8080/api/matches/${matchId}/cancel`, {
+          method: "POST",
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        });
+      } catch (e) {
+        console.error("Error cancelling RAPID search on server:", e);
+      }
+    }
+
     setIsSearchingRapid(false);
     setSearchTimeRapid(0);
   };
 
-  const pollStandardMatch = () => {
+  const pollStandardMatch = (matchId, me) => {
     let attempts = 0;
     const maxAttempts = 90; // 90 seconds
 
@@ -72,7 +113,7 @@ const GameInfo = ({ streak, userEmail }) => {
 
       try {
         const token = localStorage.getItem("authToken");
-        const response = await fetch("http://localhost:8080/api/games/check-match", {
+        const response = await fetch(`http://localhost:8080/api/matches/${matchId}`, {
           method: "GET",
           headers: token
             ? {
@@ -83,9 +124,8 @@ const GameInfo = ({ streak, userEmail }) => {
 
         if (response.ok) {
           const result = await response.json();
-          console.log("Check STANDARD match response:", result);
-
-          if (result.matchId && result.matchId > 0) {
+          // Once an opponent joins and the match is in progress, navigate to the game.
+          if (result.opponentEmail && result.status === "IN_PROGRESS") {
             clearInterval(pollingStandardRef.current);
             pollingStandardRef.current = null;
             if (searchStandardTimerRef.current) {
@@ -93,25 +133,41 @@ const GameInfo = ({ streak, userEmail }) => {
               searchStandardTimerRef.current = null;
             }
 
+            pendingStandardMatchIdRef.current = null;
             setIsSearchingStandard(false);
             setSearchTimeStandard(0);
-            navigate(`/game/${result.matchId}`);
-          } else if (result.matchId === -2) {
-            await cancelStandardSearch();
-            alert("Error checking for match. Please try again.");
+
+            let playerColor = "white";
+            if (result.createdByEmail && me && result.createdByEmail !== me) {
+              playerColor = "black";
+            }
+
+            navigate(`/game/${result.id}`, { state: { playerColor } });
           }
         }
       } catch (error) {
-        console.error("Error checking STANDARD match:", error);
+        console.error("Error polling STANDARD match:", error);
       }
     }, 1000);
   };
 
-  const pollRapidMatch = () => {
+  const pollRapidMatch = (matchId, me) => {
+    let attempts = 0;
+    const maxAttempts = 90; // 90 seconds
+
     pollingRapidRef.current = setInterval(async () => {
+      attempts++;
+      setSearchTimeRapid(attempts);
+
+      if (attempts >= maxAttempts) {
+        await cancelRapidSearch();
+        alert("Could not find a RAPID opponent within 90 seconds. Please try again.");
+        return;
+      }
+
       try {
         const token = localStorage.getItem("authToken");
-        const response = await fetch("http://localhost:8080/api/games/check-rapid-match", {
+        const response = await fetch(`http://localhost:8080/api/matches/${matchId}`, {
           method: "GET",
           headers: token
             ? {
@@ -122,10 +178,7 @@ const GameInfo = ({ streak, userEmail }) => {
 
         if (response.ok) {
           const result = await response.json();
-          console.log("Check RAPID match response:", result);
-
-          if (result.matchId && result.matchId > 0) {
-            setIsSearchingRapid(false);
+          if (result.opponentEmail && result.status === "IN_PROGRESS") {
             if (searchRapidTimerRef.current) {
               clearTimeout(searchRapidTimerRef.current);
               searchRapidTimerRef.current = null;
@@ -134,25 +187,38 @@ const GameInfo = ({ streak, userEmail }) => {
               clearInterval(pollingRapidRef.current);
               pollingRapidRef.current = null;
             }
-            navigate(`/game/${result.matchId}`);
+
+            pendingRapidMatchIdRef.current = null;
+            setIsSearchingRapid(false);
+            setSearchTimeRapid(0);
+
+            let playerColor = "white";
+            if (result.createdByEmail && me && result.createdByEmail !== me) {
+              playerColor = "black";
+            }
+
+            navigate(`/game/${result.id}`, { state: { playerColor } });
           }
         }
       } catch (error) {
-        console.error("Error checking RAPID match:", error);
+        console.error("Error polling RAPID match:", error);
       }
-    }, 3000); // poll every 3 seconds
+    }, 1000);
   };
 
   const createStandardGame = async () => {
+    // If already searching, this click acts as "Cancel".
+    if (isSearchingStandard) {
+      await cancelStandardSearch();
+      return;
+    }
+
     try {
       const token = localStorage.getItem("authToken");
       if (!token) {
         alert("You must be logged in to start a new game.");
         return;
       }
-
-      setIsSearchingStandard(true);
-      setSearchTimeStandard(0);
 
       const response = await fetch("http://localhost:8080/api/matches/create", {
         method: "POST",
@@ -177,16 +243,32 @@ const GameInfo = ({ streak, userEmail }) => {
         console.log("Create STANDARD match response:", result);
 
         if (result.id) {
-          // Determine player color based on who created the match.
-          // If the current user is the creator, they play white; otherwise black.
           const me = userEmail || "";
-          let playerColor = "white";
-          if (result.createdByEmail && me && result.createdByEmail !== me) {
-            playerColor = "black";
-          }
 
-          setIsSearchingStandard(false);
-          navigate(`/game/${result.id}`, { state: { playerColor } });
+          // If we are the creator and there is no opponent yet, enter the 90s searching state.
+          if (result.createdByEmail === me && !result.opponentEmail && result.status === "CREATED") {
+            pendingStandardMatchIdRef.current = result.id;
+            setIsSearchingStandard(true);
+            setSearchTimeStandard(0);
+
+            pollStandardMatch(result.id, me);
+
+            searchStandardTimerRef.current = setTimeout(async () => {
+              if (isSearchingStandard) {
+                await cancelStandardSearch();
+                alert("Could not find an opponent within 90 seconds. Please try again.");
+              }
+            }, 90000);
+          } else {
+            // Either we joined an existing match or the match is already in progress; go straight to game.
+            let playerColor = "white";
+            if (result.createdByEmail && me && result.createdByEmail !== me) {
+              playerColor = "black";
+            }
+
+            setIsSearchingStandard(false);
+            navigate(`/game/${result.id}`, { state: { playerColor } });
+          }
         } else {
           setIsSearchingStandard(false);
           alert("Failed to create match. Please try again.");
@@ -208,15 +290,18 @@ const GameInfo = ({ streak, userEmail }) => {
   };
 
   const createRapidGame = async () => {
+    // If already searching, treat this click as a cancel action.
+    if (isSearchingRapid) {
+      await cancelRapidSearch();
+      return;
+    }
+
     try {
       const token = localStorage.getItem("authToken");
       if (!token) {
         alert("You must be logged in to start a new game.");
         return;
       }
-
-      setIsSearchingRapid(true);
-      setSearchTimeRapid(0);
 
       // RAPID uses a separate matchmaking endpoint so it can be treated differently on the backend.
       const response = await fetch("http://localhost:8080/api/matches/create-rapid", {
@@ -242,15 +327,30 @@ const GameInfo = ({ streak, userEmail }) => {
         console.log("Create RAPID match response:", result);
 
         if (result.id) {
-          // Same color logic for rapid games.
           const me = userEmail || "";
-          let playerColor = "white";
-          if (result.createdByEmail && me && result.createdByEmail !== me) {
-            playerColor = "black";
-          }
 
-          setIsSearchingRapid(false);
-          navigate(`/game/${result.id}`, { state: { playerColor } });
+          if (result.createdByEmail === me && !result.opponentEmail && result.status === "CREATED") {
+            pendingRapidMatchIdRef.current = result.id;
+            setIsSearchingRapid(true);
+            setSearchTimeRapid(0);
+
+            pollRapidMatch(result.id, me);
+
+            searchRapidTimerRef.current = setTimeout(async () => {
+              if (isSearchingRapid) {
+                await cancelRapidSearch();
+                alert("Could not find a RAPID opponent within 90 seconds. Please try again.");
+              }
+            }, 90000);
+          } else {
+            let playerColor = "white";
+            if (result.createdByEmail && me && result.createdByEmail !== me) {
+              playerColor = "black";
+            }
+
+            setIsSearchingRapid(false);
+            navigate(`/game/${result.id}`, { state: { playerColor } });
+          }
         } else {
           setIsSearchingRapid(false);
           alert("Failed to create RAPID match. Please try again.");
