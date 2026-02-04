@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import BoardLayout from "./BoardLayout";
 import GamePlayControlContainer from "./GamePlayControlContainer";
 
-const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initialGameData, username, userEmail, initialTab }) => {
+const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initialGameData, username, userEmail, initialTab, forcedGameType }) => {
   const [moves, setMoves] = useState([]);
   const [isMyTurn, setIsMyTurn] = useState(initialGameData?.isMyTurn || (playerColor === 'white'));
   const [gameStatus, setGameStatus] = useState(initialGameData?.status || "Game started");
@@ -14,7 +14,9 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
   const drawOfferSubscriptionRef = useRef(null);
 
   // Time control: 10 minutes per side for RAPID games
-  const isRapid = initialGameData?.gameType === 'RAPID';
+  // Prefer gameType from backend, but fall back to route state if needed
+  const effectiveGameType = initialGameData?.gameType || forcedGameType || 'STANDARD';
+  const isRapid = effectiveGameType === 'RAPID';
   const [whiteTime, setWhiteTime] = useState(isRapid ? 600 : null); // seconds
   const [blackTime, setBlackTime] = useState(isRapid ? 600 : null); // seconds
   const [hasGameStarted, setHasGameStarted] = useState(false);
@@ -265,6 +267,12 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
         if (groupedMoves.length > 0) {
           setMoves(groupedMoves);
 
+          // If we already have moves in history and this is a RAPID game,
+          // ensure the clocks start ticking even for clients that join/reload mid-game.
+          if (!hasGameStarted && isRapid) {
+            setHasGameStarted(true);
+          }
+
           // Last move's fenAfter represents the final board position
           const last = history[history.length - 1];
           if (last && last.fenAfter) {
@@ -279,7 +287,7 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
     if (matchId) {
       fetchHistory();
     }
-  }, [matchId]);
+  }, [matchId, isRapid, hasGameStarted]);
 
   const addMove = (move) => {
     // Your existing move adding logic
@@ -417,7 +425,7 @@ const GameContainer = ({ matchId, stompClient, isConnected, playerColor, initial
         blackTime={blackTime}
         player1={initialGameData?.player1}
         player2={initialGameData?.player2}
-        gameType={initialGameData?.gameType}
+        gameType={effectiveGameType}
         initialHistoryFen={initialHistoryFen}
       />
       <GamePlayControlContainer 

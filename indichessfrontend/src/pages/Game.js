@@ -15,6 +15,7 @@ const Game = () => {
   const [error, setError] = useState(null);
   const [gameData, setGameData] = useState(null);
   const [playerColor, setPlayerColor] = useState(location.state?.playerColor || null);
+  const [forcedGameType] = useState(location.state?.gameType || null);
   const [username, setUsername] = useState('');
   const [userEmail, setUserEmail] = useState('');
 
@@ -253,6 +254,7 @@ const Game = () => {
           username={username}
           userEmail={userEmail}
           initialTab={location.state?.tab}
+          forcedGameType={forcedGameType}
         />
       </div>
     </div>

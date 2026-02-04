@@ -142,7 +142,7 @@ const GameInfo = ({ streak, userEmail }) => {
               playerColor = "black";
             }
 
-            navigate(`/game/${result.id}`, { state: { playerColor } });
+            navigate(`/game/${result.id}`, { state: { playerColor, gameType: "STANDARD" } });
           }
         }
       } catch (error) {
@@ -197,7 +197,7 @@ const GameInfo = ({ streak, userEmail }) => {
               playerColor = "black";
             }
 
-            navigate(`/game/${result.id}`, { state: { playerColor } });
+            navigate(`/game/${result.id}`, { state: { playerColor, gameType: "RAPID" } });
           }
         }
       } catch (error) {
@@ -267,7 +267,7 @@ const GameInfo = ({ streak, userEmail }) => {
             }
 
             setIsSearchingStandard(false);
-            navigate(`/game/${result.id}`, { state: { playerColor } });
+            navigate(`/game/${result.id}`, { state: { playerColor, gameType: "STANDARD" } });
           }
         } else {
           setIsSearchingStandard(false);
@@ -349,7 +349,7 @@ const GameInfo = ({ streak, userEmail }) => {
             }
 
             setIsSearchingRapid(false);
-            navigate(`/game/${result.id}`, { state: { playerColor } });
+            navigate(`/game/${result.id}`, { state: { playerColor, gameType: "RAPID" } });
           }
         } else {
           setIsSearchingRapid(false);
